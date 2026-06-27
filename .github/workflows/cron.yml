@@ -1,0 +1,71 @@
+name: reconcile
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # every 6 hours -> reconcile
+    - cron: "0 9 * * 1"    # Monday 09:00 UTC -> report
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Which command to run"
+        type: choice
+        default: dry-run
+        options: [dry-run, reconcile, report, status]
+
+env:
+  SPLITWISE_API_KEY: ${{ secrets.SPLITWISE_API_KEY }}
+  LUNCHMONEY_ACCESS_TOKEN: ${{ secrets.LUNCHMONEY_ACCESS_TOKEN }}
+  LM_CLEARING_ASSET_ID: ${{ secrets.LM_CLEARING_ASSET_ID }}
+  SETTLEMENT_CATEGORY_NAME: ${{ secrets.SETTLEMENT_CATEGORY_NAME }}
+  APPLY_RULES: ${{ secrets.APPLY_RULES }}
+  REPORT_WEBHOOK: ${{ secrets.REPORT_WEBHOOK }}
+  MY_SPLITWISE_USER_ID: ${{ secrets.MY_SPLITWISE_USER_ID }}
+  SWLM_DB_PATH: swlm_state.db
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync deps
+        run: uv sync --frozen
+
+      # Persist the SQLite cursor/state across runs. Cache is best-effort: if it is
+      # evicted the tool simply re-derives the cursor from --lookback-days. For durable
+      # state prefer a VPS (see README).
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: swlm_state.db
+          key: swlm-state-${{ github.run_id }}
+          restore-keys: swlm-state-
+
+      - name: Pick command
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            case "${{ inputs.command }}" in
+              dry-run)   echo "args=reconcile --dry-run" >> "$GITHUB_OUTPUT" ;;
+              *)         echo "args=${{ inputs.command }}" >> "$GITHUB_OUTPUT" ;;
+            esac
+          elif [ "${{ github.event.schedule }}" = "0 9 * * 1" ]; then
+            echo "args=report" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=reconcile" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run
+        run: uv run swlm ${{ steps.pick.outputs.args }}
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: swlm_state.db
+          key: swlm-state-${{ github.run_id }}
