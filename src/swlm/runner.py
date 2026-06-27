@@ -130,8 +130,12 @@ class Reconciler:
 
         plan = ActionPlan(txns=[op.txn for op in ops])
 
+        # actual = sum of our posted offsets (source of truth), NOT the asset's balance field.
+        # Wide window so it captures the full history of what we've written.
         net = net_position(self.sw.get_friends(), [])
-        actual = self.lm.get_asset_balance(self.cfg.clearing_asset_id)
+        actual = self.lm.get_managed_total(
+            self.cfg.clearing_asset_id, date(2000, 1, 1), date.today()
+        )
         expected, drift = compute_drift(net, actual)
         plan.expected_clearing, plan.actual_clearing, plan.drift = expected, actual, drift
 

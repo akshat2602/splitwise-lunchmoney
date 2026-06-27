@@ -109,3 +109,19 @@ class LunchMoneyClient:
             for t in txns
             if t.external_id and t.external_id.startswith("sw:")
         }
+
+    def get_managed_total(self, asset_id: int, start_date: date, end_date: date) -> Decimal:
+        """Sum the signed amounts of OUR ``sw:`` clearing txns straight from Lunch Money.
+
+        Used as ``actual_clearing`` for the drift check instead of the asset's stored balance
+        field — so drift never depends on whether/how Lunch Money updates a manual asset's
+        balance. Fully mirrored, this sum equals ``-net`` (see drift.py).
+        """
+        txns = self.lunch.get_transactions(
+            asset_id=asset_id, start_date=start_date, end_date=end_date, debit_as_negative=False
+        )
+        total = Decimal("0")
+        for t in txns:
+            if t.external_id and t.external_id.startswith("sw:"):
+                total += to_cents(Decimal(str(t.amount)))
+        return to_cents(total)

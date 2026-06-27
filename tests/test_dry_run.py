@@ -26,8 +26,8 @@ class FakeLM:
         self.upserts.append((planned, existing_txn_id, apply_rules))
         return 4242
 
-    def get_asset_balance(self, asset_id):
-        return Decimal("0.00")
+    def get_managed_total(self, asset_id, start_date, end_date):
+        return Decimal("0.00")  # nothing posted yet
 
     def get_external_id_map(self, asset_id, start_date, end_date):
         return {}  # nothing in LM yet -> inserts
