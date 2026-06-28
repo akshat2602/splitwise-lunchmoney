@@ -49,14 +49,13 @@ def report():
 
 @app.command()
 def status():
-    """Print the last run timestamp and the current cursor."""
+    """Print the last run timestamp."""
     settings = Settings.from_env()
     from swlm.state import StateStore
 
     state = StateStore(settings.db_path)
     try:
         typer.echo(f"last_run: {state.get_last_run()}")
-        typer.echo(f"cursor:   {state.get_cursor()}")
     finally:
         state.close()
 

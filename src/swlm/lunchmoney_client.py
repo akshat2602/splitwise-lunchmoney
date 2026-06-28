@@ -23,6 +23,13 @@ from swlm.money import to_cents
 T = TypeVar("T")
 
 
+PAYEE_MAX = 140  # Lunch Money caps payee length
+
+
+def _payee(text: str) -> str:
+    return text[:PAYEE_MAX]
+
+
 @dataclass(frozen=True)
 class ManagedTxn:
     """One of our existing clearing txns as Lunch Money currently holds it."""
@@ -77,7 +84,7 @@ class LunchMoneyClient:
         return TransactionInsertObject(
             date=planned.date,
             amount=float(to_lm_amount(signed)),  # SDK field is float; sign already centralized
-            payee=planned.payee,
+            payee=_payee(planned.payee),
             notes=planned.notes,
             category_id=planned.category_id,
             asset_id=planned.asset_id,
@@ -118,7 +125,7 @@ class LunchMoneyClient:
         signed = Decimal("0.00") if planned.reverse else to_cents(planned.signed_amount)
         obj = TransactionUpdateObject(
             amount=float(to_lm_amount(signed)),
-            payee=planned.payee,
+            payee=_payee(planned.payee),
             notes=planned.notes,
         )
         self._call(self.lunch.update_transaction, existing_txn_id, obj, debit_as_negative=False)

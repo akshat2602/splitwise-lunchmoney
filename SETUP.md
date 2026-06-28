@@ -31,9 +31,12 @@ Money **rules** categorize it at insert (`APPLY_RULES=true`).
 ```bash
 cp .env.example .env
 # required: SPLITWISE_API_KEY, LUNCHMONEY_ACCESS_TOKEN, LM_CLEARING_ASSET_ID
-# optional: SETTLEMENT_CATEGORY_NAME (default "Splitwise Settlement"), APPLY_RULES (default true)
+# optional: SETTLEMENT_CATEGORY_NAME (default "Splitwise Settlement"),
+#           BASE_CURRENCY (default USD, must match the clearing asset), APPLY_RULES (default true)
 set -a; source .env; set +a
 ```
+
+The env file is not auto-loaded — `source` it (as above) before running, or export the vars.
 
 ## 5. Dry run first (mandatory)
 
@@ -48,26 +51,26 @@ Read the output carefully:
 - **external_id**s look like `sw:<expense_id>:clear` (one per item).
 - **Projected drift** is printed at the bottom.
 
-Re-run it — output must be identical every time (dry-run writes nothing: no LM, no SQLite, no
-cursor advance). Only proceed when the signs look right.
+Re-run it — output must be identical every time (dry-run writes nothing). Only proceed when the
+signs look right.
 
-## 6. First real run + absorb history
+> Each run is a full resync over all history, so the first real run may write hundreds of
+> transactions (and zero out anything mis-posted). Only `BASE_CURRENCY` expenses are posted.
+
+## 6. First real run
 
 ```bash
 uv run swlm reconcile
+uv run swlm report     # drift should read ~0 [RECONCILED]
 ```
 
-Then reconcile the opening balance **once**: check `report`/`status` drift, and edit the
-`Splitwise Clearing` asset's starting balance by that drift so it reads ~0. This absorbs all
-historical settlements that happened before the tool existed. After this, drift should stay
-near 0 and any future nonzero drift is a real signal.
-
-> First run with no cursor only looks back `FIRST_RUN_LOOKBACK_DAYS` (default 90), not all
-> history — keep that in mind when absorbing the opening balance.
+`actual` is the sum of the offsets the tool has posted; `expected` is `-net` from your
+Splitwise friend balances. Once the full history is mirrored they match and drift is ~0. Any
+later nonzero drift is a real signal (e.g. an expense you haven't recorded a settlement for).
 
 ## 7. Automate
 
 GitHub Actions: add every `.env` key as a repo **Secret**, then the workflow in
-`.github/workflows/cron.yml` runs `reconcile` every 6h + Monday `report`. State is just a
-cursor cache (Lunch Money is the source of truth), so losing it never causes duplicates — a
-VPS is optional and only avoids occasional wider re-scans.
+`.github/workflows/cron.yml` runs `reconcile` every 6h + Monday `report`. Each run is a full
+self-cleaning resync (Lunch Money is the source of truth), so there is no state to persist and
+nothing to corrupt — a VPS is optional.

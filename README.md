@@ -27,6 +27,11 @@ drift is ~0. Any nonzero **drift** is the alert signal.
 
 The real Zelle/Venmo lands in Checking and is left alone — a separate account. There is **no**
 transfer-scanning, no `KNOWN_PAYEES`: the clearing balance stays correct purely from Splitwise.
+When a friend settles, record it in Splitwise (the tool posts the offset) and categorize the
+incoming Zelle in Checking to the excluded `Splitwise Settlement` category so it isn't income.
+
+Only expenses in `BASE_CURRENCY` (default USD, must match the clearing asset) are posted;
+Splitwise expenses in any other currency are ignored.
 
 ### Sign convention (the crux)
 
@@ -40,22 +45,23 @@ single global flip — verify with `reconcile --dry-run` and a first real txn be
 `net = sum(get_friends balances)`, `expected_clearing = −net`,
 `drift = actual_clearing − expected_clearing` (within a 1¢ epsilon). ~0 = reconciled.
 
-## Idempotency & crash-resilience
+## Idempotency, crash-resilience & self-cleaning
 
-**Lunch Money is the source of truth — correctness never depends on local state.** Every
-tool-created txn has a deterministic `external_id` (`sw:<id>:clear`). On each run the tool
-rebuilds the `external_id → txn_id` map *directly from Lunch Money* (over a window covering
-every affected item's date) and upserts against it: present → update in place, absent →
-insert. So:
+**Lunch Money is the source of truth — correctness never depends on local state.** Each run is
+a full **resync**: fetch *all* Splitwise expenses, compute the complete set of desired offsets
+(deterministic `external_id` = `sw:<id>:clear`, base-currency items only), and reconcile Lunch
+Money to match it **exactly**:
 
-- A **crash mid-run**, a **lost/corrupt cache**, or a **missed cursor advance** all self-heal on
-  the next run — no duplicates, no desync.
-- The cursor advances **only after** a successful apply.
-- Edits (`updated_at` moved) and deletions (`deleted_at` → reverse the existing txn to 0) are
-  caught via Splitwise's `updated_after`. Settle-up payments post their own offset.
-- The local SQLite file holds **only the cursor + last-run timestamp** — a pure optimization.
-  Delete it and the next run just re-scans a wider window.
-- The **drift check** is the final backstop for anything slipping past the cursor.
+- desired offset missing in LM → **insert**
+- present with a different amount → **update in place**
+- present and already correct → **skip** (steady-state runs write nothing → no rate-limit churn)
+- managed txn with no desired offset → **zero it out** (deleted, settled-to-even, wrong
+  currency, or anything previously mis-posted)
+
+So a **crash mid-run**, a **lost/corrupt cache**, a **duplicate**, or **orphaned/garbage txns**
+all self-heal on the next run. The local SQLite file holds only the last-run timestamp — pure
+cosmetics, safe to delete. The **drift check** is the final backstop. Reads are paginated
+fully; inserts are batched (≤100/request) and every Lunch Money call retries 429 with backoff.
 
 ## Install & run
 
@@ -64,24 +70,22 @@ uv sync
 cp .env.example .env   # fill in, then: set -a; source .env; set +a
 
 uv run swlm reconcile --dry-run   # read everything, write NOTHING — do this first
-uv run swlm reconcile             # real run
+uv run swlm reconcile             # real run (full resync)
 uv run swlm report                # recompute drift -> REPORT_WEBHOOK
-uv run swlm status                # last run + cursor
+uv run swlm status                # last run timestamp
 ```
 
-`reconcile` flags: `--dry-run`, `--since <ISO8601>`, `--lookback-days <N>`.
-
-**Always `--dry-run` first** to eyeball signs, amounts, external_ids, and projected drift.
-See [SETUP.md](SETUP.md) for the exact account/category creation and first-run flow.
+`reconcile` takes only `--dry-run`. **Always `--dry-run` first** to eyeball signs, amounts,
+external_ids, and projected drift. See [SETUP.md](SETUP.md) for account/category creation and
+the first-run flow.
 
 ## Running on a schedule
 
 - **GitHub Actions** (`.github/workflows/cron.yml`): `reconcile` every 6h, Monday `report`, plus a
   manual `workflow_dispatch` (defaults to dry-run). Config comes from repo **Secrets** (same
-  names as `.env`). The cursor cache rides `actions/cache` purely as a speed optimization — if
-  it's ever evicted, correctness is unaffected (the next run just re-scans `--lookback-days`).
-- **VPS** (optional, only to avoid re-scans): clone, `uv sync`, put the env vars in the
-  environment, point `SWLM_DB_PATH` at a persistent path, and add cron lines:
+  names as `.env`). No state to persist — every run is a full resync — so the `actions/cache`
+  step is purely cosmetic.
+- **VPS** (optional): clone, `uv sync`, put the env vars in the environment, and add cron lines:
   ```cron
   0 */6 * * *  cd /opt/swlm && uv run swlm reconcile
   0 9 * * 1    cd /opt/swlm && uv run swlm report
