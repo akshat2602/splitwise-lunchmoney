@@ -18,6 +18,18 @@ def test_from_env_required_and_defaults():
     assert s.report_webhook is None
 
 
+def test_empty_optionals_fall_back_to_defaults():
+    # GitHub Actions passes unset secrets as empty strings, not missing keys.
+    env = dict(BASE_ENV)
+    env["BASE_CURRENCY"] = ""
+    env["SETTLEMENT_CATEGORY_NAME"] = ""
+    env["APPLY_RULES"] = ""
+    s = Settings.from_env(env)
+    assert s.base_currency == "USD"
+    assert s.settlement_category_name == "Splitwise Settlement"
+    assert s.apply_rules is True
+
+
 def test_from_env_missing_required_raises():
     env = dict(BASE_ENV)
     del env["LM_CLEARING_ASSET_ID"]

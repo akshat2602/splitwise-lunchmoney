@@ -39,9 +39,11 @@ class Settings:
             splitwise_api_key=env["SPLITWISE_API_KEY"],
             lunchmoney_access_token=env["LUNCHMONEY_ACCESS_TOKEN"],
             clearing_asset_id=int(env["LM_CLEARING_ASSET_ID"]),
-            settlement_category_name=env.get("SETTLEMENT_CATEGORY_NAME", "Splitwise Settlement"),
-            base_currency=env.get("BASE_CURRENCY", "USD").upper(),
-            apply_rules=env.get("APPLY_RULES", "true").lower() in _TRUE,
+            # `or default` (not get's default): in GitHub Actions an unset secret arrives as
+            # an empty string, which must fall back to the default rather than stick as "".
+            settlement_category_name=env.get("SETTLEMENT_CATEGORY_NAME") or "Splitwise Settlement",
+            base_currency=(env.get("BASE_CURRENCY") or "USD").upper(),
+            apply_rules=(env.get("APPLY_RULES") or "true").lower() in _TRUE,
             report_webhook=env.get("REPORT_WEBHOOK") or None,
             my_splitwise_user_id=int(my_id) if my_id else None,
             db_path=env.get("SWLM_DB_PATH", "swlm_state.db"),
