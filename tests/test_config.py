@@ -13,9 +13,9 @@ def test_from_env_required_and_defaults():
     s = Settings.from_env(BASE_ENV)
     assert s.clearing_asset_id == 9001
     assert s.settlement_category_name == "Splitwise Settlement"
+    assert s.base_currency == "USD"
     assert s.apply_rules is True
     assert s.report_webhook is None
-    assert s.lookback_days == 90
 
 
 def test_from_env_missing_required_raises():
@@ -31,10 +31,10 @@ def test_optional_overrides():
     env["APPLY_RULES"] = "false"
     env["REPORT_WEBHOOK"] = "https://hooks.example/x"
     env["MY_SPLITWISE_USER_ID"] = "100"
-    env["FIRST_RUN_LOOKBACK_DAYS"] = "30"
+    env["BASE_CURRENCY"] = "gbp"
     s = Settings.from_env(env)
     assert s.settlement_category_name == "SW Settle"
     assert s.apply_rules is False
     assert s.report_webhook == "https://hooks.example/x"
     assert s.my_splitwise_user_id == 100
-    assert s.lookback_days == 30
+    assert s.base_currency == "GBP"

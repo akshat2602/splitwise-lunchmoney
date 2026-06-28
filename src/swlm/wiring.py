@@ -25,7 +25,7 @@ def build_reconciler(settings: Settings) -> tuple[Reconciler, SplitwiseClient, S
         my_user_id=my_user_id,
         clearing_asset_id=settings.clearing_asset_id,
         settlement_category_id=settlement_category_id,
+        base_currency=settings.base_currency,
         apply_rules=settings.apply_rules,
-        lookback_days=settings.lookback_days,
     )
     return Reconciler(sw, lm, state, config), sw, state

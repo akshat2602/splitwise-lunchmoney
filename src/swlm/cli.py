@@ -16,21 +16,12 @@ def reconcile(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Read everything, write NOTHING. Print planned actions + drift."
     ),
-    since: str | None = typer.Option(
-        None, "--since", help="Override cursor: ISO8601 updated_after (e.g. 2026-01-01T00:00:00Z)."
-    ),
-    lookback_days: int | None = typer.Option(
-        None, "--lookback-days", help="First-run look-back window when no cursor exists."
-    ),
 ):
-    """Reconcile Splitwise into the Lunch Money clearing account."""
+    """Reconcile Splitwise into the Lunch Money clearing account (full self-cleaning resync)."""
     settings = Settings.from_env()
-    if lookback_days is not None:
-        settings.lookback_days = lookback_days
-
     reconciler, sw, state = build_reconciler(settings)
     try:
-        plan = reconciler.run(dry_run=dry_run, since=since)
+        plan = reconciler.run(dry_run=dry_run)
     finally:
         sw.close()
         state.close()

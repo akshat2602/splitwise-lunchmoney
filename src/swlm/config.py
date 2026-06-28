@@ -20,11 +20,11 @@ class Settings:
     lunchmoney_access_token: str
     clearing_asset_id: int
     settlement_category_name: str = "Splitwise Settlement"
+    base_currency: str = "USD"
     apply_rules: bool = True
     report_webhook: str | None = None
     my_splitwise_user_id: int | None = None
     db_path: str = "swlm_state.db"
-    lookback_days: int = 90
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Settings:
@@ -40,9 +40,9 @@ class Settings:
             lunchmoney_access_token=env["LUNCHMONEY_ACCESS_TOKEN"],
             clearing_asset_id=int(env["LM_CLEARING_ASSET_ID"]),
             settlement_category_name=env.get("SETTLEMENT_CATEGORY_NAME", "Splitwise Settlement"),
+            base_currency=env.get("BASE_CURRENCY", "USD").upper(),
             apply_rules=env.get("APPLY_RULES", "true").lower() in _TRUE,
             report_webhook=env.get("REPORT_WEBHOOK") or None,
             my_splitwise_user_id=int(my_id) if my_id else None,
             db_path=env.get("SWLM_DB_PATH", "swlm_state.db"),
-            lookback_days=int(env.get("FIRST_RUN_LOOKBACK_DAYS", "90")),
         )

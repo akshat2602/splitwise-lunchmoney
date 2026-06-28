@@ -20,17 +20,21 @@ class FakeSW:
 
 class FakeLM:
     def __init__(self):
-        self.upserts = []
+        self.inserted = []
+        self.updated = []
+        self.apply_rules_seen = None
 
-    def upsert(self, planned, existing_txn_id, *, apply_rules=False):
-        self.upserts.append((planned, existing_txn_id, apply_rules))
-        return 4242
+    def insert_many(self, planned, *, apply_rules=False):
+        self.inserted.extend(planned)
+        self.apply_rules_seen = apply_rules
+        return [4242] * len(planned)
 
-    def get_managed_total(self, asset_id, start_date, end_date):
-        return Decimal("0.00")  # nothing posted yet
+    def update_existing(self, planned, existing_txn_id):
+        self.updated.append((planned, existing_txn_id))
+        return existing_txn_id
 
-    def get_external_id_map(self, asset_id, start_date, end_date):
-        return {}  # nothing in LM yet -> inserts
+    def get_managed_index(self, asset_id, start_date, end_date):
+        return {}  # nothing in LM yet -> inserts, drift total 0
 
 
 def _reconciler(tmp_path):
@@ -53,18 +57,17 @@ def test_dry_run_writes_nothing(tmp_path):
 
     assert len(plan.txns) == 1
     assert plan.drift == Decimal("0.00")
-    assert lm.upserts == []  # NO Lunch Money writes
-    assert state.get_cursor() is None  # NO cursor advance
+    assert lm.inserted == []  # NO Lunch Money writes
+    assert lm.updated == []
     assert state.get_last_run() is None  # NO state mutation
 
 
-def test_real_run_writes_with_apply_rules_and_advances_cursor(tmp_path):
+def test_real_run_writes_with_apply_rules(tmp_path):
     rec, lm, state = _reconciler(tmp_path)
 
     rec.run(dry_run=False)
 
-    assert len(lm.upserts) == 1
-    assert lm.upserts[0][1] is None  # not in LM map -> insert
-    assert lm.upserts[0][2] is True  # apply_rules forwarded
-    assert state.get_cursor() == "2026-06-01T00:00:00Z"
+    assert len(lm.inserted) == 1  # not in LM index -> insert
+    assert lm.updated == []
+    assert lm.apply_rules_seen is True  # apply_rules forwarded
     assert state.get_last_run() is not None

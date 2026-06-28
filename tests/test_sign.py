@@ -51,11 +51,22 @@ def test_insert_passes_debit_as_negative_false_and_preserves_sign():
     txn_id = client.upsert(_txn("-90.00"), existing_txn_id=None)
 
     assert txn_id == 777
-    (obj, kwargs) = fake.inserts[0]
+    (batch, kwargs) = fake.inserts[0]
     assert kwargs["debit_as_negative"] is False
+    obj = batch[0]  # inserts are batched into a list
     assert obj.amount == Decimal("-90.00")
     assert obj.external_id == "sw:1:clear"
     assert obj.asset_id == 9001
+
+
+def test_inserts_are_batched_into_one_request():
+    fake = FakeLunch()
+    client = LunchMoneyClient(fake)
+
+    client.insert_many([_txn("1.00"), _txn("2.00"), _txn("3.00")])
+
+    assert len(fake.inserts) == 1  # single API call for all three
+    assert len(fake.inserts[0][0]) == 3
 
 
 def test_update_in_place_uses_existing_id_no_insert():

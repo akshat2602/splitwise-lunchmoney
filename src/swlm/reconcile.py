@@ -27,6 +27,7 @@ def plan_expense(
     my_user_id: int,
     clearing_asset_id: int,
     settlement_category_id: int | None,
+    base_currency: str = "USD",
 ) -> list[PlannedTxn]:
     """Return the desired clearing txn(s) for one ACTIVE item (deletions handled upstream).
 
@@ -35,8 +36,11 @@ def plan_expense(
       * ``my_net < 0`` (I owe / a friend paid): a debit = my real consumption (or, for a
         settle-up payment, a balance move tagged with the excluded settlement category).
       * ``my_net == 0``: nothing.
+
+    Only items in ``base_currency`` are posted: the clearing asset is single-currency, and the
+    drift check sums one currency, so mixing in other-currency amounts would corrupt both.
     """
-    if expense.is_deleted:
+    if expense.is_deleted or expense.currency != base_currency:
         return []
 
     mine = expense.share_for(my_user_id)
